@@ -1,8 +1,9 @@
+import type { EnumDeclarationNode } from '../ast/enum-declaration-node';
 import type { ExpressionNode } from '../ast/expression-node';
 import type { LiteralNode } from '../ast/literal-node';
 import type { ModuleReferenceNode } from '../ast/module-reference-node';
-import type { RuntimeEnumDeclarationNode } from '../ast/runtime-enum-declaration-node';
 import type { TemplateNode } from '../ast/template-node';
+import type { TypeAliasDeclarationNode } from '../ast/type-alias-declaration-node';
 import {
   toKyselyPascalCase,
   toScreamingSnakeCase,
@@ -16,17 +17,19 @@ type SymbolMap = Record<string, SymbolNode | undefined>;
 type SymbolNameMap = Record<string, string | undefined>;
 
 export type SymbolNode =
-  | { node: ExpressionNode | TemplateNode; type: 'Definition' }
+  | { node: ExpressionNode | TemplateNode | TypeAliasDeclarationNode; type: 'Definition' }
   | { node: ModuleReferenceNode; type: 'ModuleReference' }
-  | { node: RuntimeEnumDeclarationNode; type: 'RuntimeEnumDefinition' }
+  | { node: EnumDeclarationNode; type: 'EnumDefinition' }
   | { node: LiteralNode<string>; type: 'RuntimeEnumMember' }
+  | { node: LiteralNode<string>; type: 'PojoEnumMember' }
   | { type: 'Table' };
 
 export type SymbolType =
   | 'Definition'
   | 'ModuleReference'
-  | 'RuntimeEnumDefinition'
+  | 'EnumDefinition'
   | 'RuntimeEnumMember'
+  | 'PojoEnumMember'
   | 'Table';
 
 export class SymbolCollection {

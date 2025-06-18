@@ -1,1 +1,1 @@
-export type RuntimeEnumsStyle = 'pascal-case' | 'screaming-snake-case';
+export type RuntimeEnumsStyle = 'pascal-case' | 'screaming-snake-case' | 'pojo';

@@ -1,6 +1,7 @@
 import type { DatabaseMetadata } from '../../introspector';
 import type { AliasDeclarationNode } from '../ast/alias-declaration-node';
 import type { ArrayExpressionNode } from '../ast/array-expression-node';
+import type { EnumDeclarationNode } from '../ast/enum-declaration-node';
 import type { ExportStatementNode } from '../ast/export-statement-node';
 import type { ExpressionNode } from '../ast/expression-node';
 import type { ExtendsClauseNode } from '../ast/extends-clause-node';
@@ -15,8 +16,8 @@ import type { MappedTypeNode } from '../ast/mapped-type-node';
 import type { ObjectExpressionNode } from '../ast/object-expression-node';
 import type { PropertyNode } from '../ast/property-node';
 import type { RawExpressionNode } from '../ast/raw-expression-node';
-import type { RuntimeEnumDeclarationNode } from '../ast/runtime-enum-declaration-node';
 import type { StatementNode } from '../ast/statement-node';
+import type { TypeAliasDeclarationNode } from '../ast/type-alias-declaration-node';
 import type { UnionExpressionNode } from '../ast/union-expression-node';
 import type { GeneratorDialect } from '../dialect';
 import { transform, type Overrides } from '../transformer/transformer';
@@ -126,8 +127,11 @@ export class TypeScriptSerializer implements Serializer {
       case 'InterfaceDeclaration':
         data += this.serializeInterfaceDeclaration(node.argument);
         break;
-      case 'RuntimeEnumDeclaration':
-        data += this.serializeRuntimeEnum(node.argument);
+      case 'EnumDeclaration':
+        data += this.serializeEnum(node.argument);
+        break;
+      case 'TypeAliasDeclaration':
+        data += this.serializeTypeAliasDeclaration(node.argument);
         break;
     }
 
@@ -354,7 +358,15 @@ export class TypeScriptSerializer implements Serializer {
     return node.expression;
   }
 
-  serializeRuntimeEnum(node: RuntimeEnumDeclarationNode) {
+  serializeEnum(node: EnumDeclarationNode) {
+    if (node.style === 'runtime') {
+      return this.serializeRuntimeEnumContent(node);
+    } else {
+      return this.serializePojoEnumContent(node);
+    }
+  }
+
+  serializeRuntimeEnumContent(node: EnumDeclarationNode) {
     let data = 'enum ';
 
     data += node.id.name;
@@ -380,6 +392,42 @@ export class TypeScriptSerializer implements Serializer {
     }
 
     data += '}';
+
+    return data;
+  }
+
+  serializePojoEnumContent(node: EnumDeclarationNode) {
+    let data = 'const ';
+
+    data += node.id.name;
+    data += ' = {\n';
+
+    const members = [...node.members].sort(([a], [b]) => {
+      return a.localeCompare(b);
+    });
+
+    for (const member of members) {
+      data += '  ';
+      data += this.serializeKey(member[0]);
+      data += ': ';
+      data += this.serializeLiteral(member[1]);
+      data += ',';
+      data += '\n';
+    }
+
+    data += '} as const';
+
+    return data;
+  }
+
+  serializeTypeAliasDeclaration(node: TypeAliasDeclarationNode) {
+    let data = '';
+
+    data += 'type ';
+    data += node.id.name;
+    data += ' = ';
+    data += this.serializeExpression(node.expression);
+    data += ';';
 
     return data;
   }

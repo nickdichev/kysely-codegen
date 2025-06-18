@@ -5,6 +5,7 @@ import type { TableMetadata } from '../../introspector/metadata/table-metadata';
 import type { Definitions, Imports, Scalars } from '../adapter';
 import { AliasDeclarationNode } from '../ast/alias-declaration-node';
 import { ArrayExpressionNode } from '../ast/array-expression-node';
+import { EnumDeclarationNode } from '../ast/enum-declaration-node';
 import { ExportStatementNode } from '../ast/export-statement-node';
 import type { ExpressionNode } from '../ast/expression-node';
 import { GenericExpressionNode } from '../ast/generic-expression-node';
@@ -16,13 +17,13 @@ import { LiteralNode } from '../ast/literal-node';
 import { ObjectExpressionNode } from '../ast/object-expression-node';
 import { PropertyNode } from '../ast/property-node';
 import { RawExpressionNode } from '../ast/raw-expression-node';
-import { RuntimeEnumDeclarationNode } from '../ast/runtime-enum-declaration-node';
 import type { TemplateNode } from '../ast/template-node';
+import { TypeAliasDeclarationNode } from '../ast/type-alias-declaration-node';
 import { UnionExpressionNode } from '../ast/union-expression-node';
 import type { GeneratorDialect } from '../dialect';
 import { PostgresDialect } from '../dialects/postgres/postgres-dialect';
 import type { RuntimeEnumsStyle } from '../generator/runtime-enums-style';
-import { toKyselyCamelCase } from '../utils/case-converter';
+import { toKyselyCamelCase, toKyselyPascalCase } from '../utils/case-converter';
 import { GLOBAL_DEFINITIONS } from './definitions';
 import { GLOBAL_IMPORTS } from './imports';
 import type { SymbolNode } from './symbol-collection';
@@ -96,8 +97,56 @@ const collectSymbol = (name: string, context: TransformContext) => {
   }
 };
 
+const createEnumNode = (
+  symbolId: string,
+  enumValues: string[],
+  runtimeEnums: boolean | RuntimeEnumsStyle,
+  context: TransformContext,
+): IdentifierNode => {
+  if (runtimeEnums === 'pojo') {
+    // For POJO enums, we need to generate both the POJO object and a type alias
+    const runtimeSymbolId = `Runtime${toKyselyPascalCase(symbolId)}`;
+    const enumSymbol: SymbolNode = {
+      node: new EnumDeclarationNode(runtimeSymbolId, enumValues, 'pojo', {
+        identifierStyle: 'kysely-pascal-case',
+      }),
+      type: 'EnumDefinition',
+    };
+    enumSymbol.node.id.name = context.symbols.set(runtimeSymbolId, enumSymbol);
+
+    // Create the type alias for the inferred type
+    // Transform the symbolId to a valid TypeScript identifier by removing non-word chars
+    const cleanSymbolId = symbolId.replaceAll(/[^\w]/g, '_');
+    const typeAliasName = toKyselyPascalCase(cleanSymbolId);
+    const typeAliasExpression = new RawExpressionNode(
+      `(typeof ${enumSymbol.node.id.name})[keyof typeof ${enumSymbol.node.id.name}]`,
+    );
+    const typeAliasNode = new TypeAliasDeclarationNode(typeAliasName, typeAliasExpression);
+    const typeAliasSymbol: SymbolNode = {
+      node: typeAliasNode,
+      type: 'Definition',
+    };
+    const typeSymbolName = context.symbols.set(symbolId, typeAliasSymbol);
+
+    return new IdentifierNode(typeSymbolName);
+  } else {
+    // Runtime enum
+    const enumSymbol: SymbolNode = {
+      node: new EnumDeclarationNode(symbolId, enumValues, 'runtime', {
+        identifierStyle:
+          runtimeEnums === 'screaming-snake-case'
+            ? 'screaming-snake-case'
+            : 'kysely-pascal-case',
+      }),
+      type: 'EnumDefinition',
+    };
+    enumSymbol.node.id.name = context.symbols.set(symbolId, enumSymbol);
+    return new IdentifierNode(enumSymbol.node.id.name);
+  }
+};
+
 const collectSymbols = (
-  node: ExpressionNode | TemplateNode,
+  node: ExpressionNode | TemplateNode | TypeAliasDeclarationNode,
   context: TransformContext,
 ) => {
   switch (node.type) {
@@ -138,6 +187,9 @@ const collectSymbols = (
       collectSymbol(node.expression, context);
       break;
     case 'Template':
+      collectSymbols(node.expression, context);
+      break;
+    case 'TypeAliasDeclaration':
       collectSymbols(node.expression, context);
       break;
     case 'UnionExpression':
@@ -199,11 +251,11 @@ const createDatabaseExportNode = (context: TransformContext) => {
   return new ExportStatementNode(argument);
 };
 
-const createRuntimeEnumDefinitionNodes = (context: TransformContext) => {
+const createEnumDefinitionNodes = (context: TransformContext) => {
   const exportStatements: ExportStatementNode[] = [];
 
   for (const { symbol } of context.symbols.entries()) {
-    if (symbol.type !== 'RuntimeEnumDefinition') {
+    if (symbol.type !== 'EnumDefinition') {
       continue;
     }
 
@@ -224,7 +276,9 @@ const createDefinitionNodes = (context: TransformContext) => {
       continue;
     }
 
-    const argument = new AliasDeclarationNode(name, symbol.node);
+    const argument = symbol.node.type === 'TypeAliasDeclaration'
+      ? symbol.node
+      : new AliasDeclarationNode(name, symbol.node);
     const definitionNode = new ExportStatementNode(argument);
     definitionNodes.push(definitionNode);
   }
@@ -354,17 +408,7 @@ const transformColumnToArgs = (
 
   if (enumValues) {
     if (context.runtimeEnums) {
-      const symbol: SymbolNode = {
-        node: new RuntimeEnumDeclarationNode(symbolId, enumValues, {
-          identifierStyle:
-            context.runtimeEnums === 'screaming-snake-case'
-              ? 'screaming-snake-case'
-              : 'kysely-pascal-case',
-        }),
-        type: 'RuntimeEnumDefinition',
-      };
-      symbol.node.id.name = context.symbols.set(symbolId, symbol);
-      const node = new IdentifierNode(symbol.node.id.name);
+      const node = createEnumNode(symbolId, enumValues, context.runtimeEnums, context);
       return [node];
     }
 
@@ -446,13 +490,13 @@ export const transform = (options: TransformOptions) => {
   const context = createContext(options);
   const tableNodes = transformTables(context);
   const importNodes = createImportNodes(context);
-  const runtimeEnumDefinitionNodes = createRuntimeEnumDefinitionNodes(context);
+  const enumDefinitionNodes = createEnumDefinitionNodes(context);
   const definitionNodes = createDefinitionNodes(context);
   const databaseNode = createDatabaseExportNode(context);
 
   return [
     ...importNodes,
-    ...runtimeEnumDefinitionNodes,
+    ...enumDefinitionNodes,
     ...definitionNodes,
     ...tableNodes,
     databaseNode,

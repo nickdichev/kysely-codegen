@@ -128,6 +128,7 @@ export class Cli {
     switch (input) {
       case 'pascal-case':
       case 'screaming-snake-case':
+      case 'pojo':
         return input;
       default:
         return this.#parseBoolean(input);

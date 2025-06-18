@@ -101,7 +101,7 @@ export const FLAGS = [
     description:
       'Generate runtime enums instead of string unions for PostgreSQL enums.',
     longName: 'runtime-enums',
-    values: ['pascal-case', 'screaming-snake-case'],
+    values: ['pascal-case', 'screaming-snake-case', 'pojo'],
   },
   {
     description:

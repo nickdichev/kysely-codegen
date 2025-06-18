@@ -104,9 +104,17 @@ export const configSchema = z.object({
   runtimeEnums: z
     .union([
       z.boolean(),
-      z.enum<RuntimeEnumsStyle, ['pascal-case', 'screaming-snake-case']>([
+      z.enum<
+        RuntimeEnumsStyle,
+        [
+          'pascal-case',
+          'screaming-snake-case',
+          'pojo',
+        ]
+      >([
         'pascal-case',
         'screaming-snake-case',
+        'pojo',
       ]),
     ])
     .optional(),
