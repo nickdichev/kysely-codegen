@@ -1,0 +1,1 @@
+{"version":3,"file":"type-alias-declaration-node.js","sourceRoot":"","sources":["../../../src/generator/ast/type-alias-declaration-node.ts"],"names":[],"mappings":";;;AACA,uDAAmD;AAEnD,MAAa,wBAAwB;IAKnC,YAAY,IAAY,EAAE,UAA0B;QAH3C,SAAI,GAAG,sBAAsB,CAAC;QAIrC,IAAI,CAAC,EAAE,GAAG,IAAI,gCAAc,CAAC,IAAI,CAAC,CAAC;QACnC,IAAI,CAAC,UAAU,GAAG,UAAU,CAAC;IAC/B,CAAC;CACF;AATD,4DASC"}
